@@ -28,8 +28,10 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // Parse destination URL
-  const destination = getQuery<{ destination?: string }>(event).destination;
+  // Parse destination URL and headers
+  const query = getQuery<{ destination?: string; headers?: string }>(event);
+  const destination = query.destination;
+  
   if (!destination) {
     return await sendJson({
       event,
@@ -40,6 +42,22 @@ export default defineEventHandler(async (event) => {
         })`,
       },
     });
+  }
+
+  // Parse custom headers if provided
+  let customHeaders: Record<string, string> = {};
+  if (query.headers) {
+    try {
+      customHeaders = JSON.parse(decodeURIComponent(query.headers));
+    } catch (e) {
+      return await sendJson({
+        event,
+        status: 400,
+        data: {
+          error: 'Invalid headers format. Expected JSON object.',
+        },
+      });
+    }
   }
 
   // Check if allowed to make the request
@@ -63,7 +81,7 @@ export default defineEventHandler(async (event) => {
       blacklistedHeaders: getBlacklistedHeaders(),
       fetchOptions: {
         redirect: 'follow',
-        headers: getProxyHeaders(event.headers),
+        headers: getProxyHeaders(event.headers, customHeaders),
         body,
       },
       onResponse(outputEvent, response) {
